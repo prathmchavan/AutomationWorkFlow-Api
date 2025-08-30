@@ -1,12 +1,12 @@
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
-builder.Services.AddAuthentication();
-builder.Services.AddAuthorization();
+
 builder.Services.AddCors(option =>
 {
     option.AddDefaultPolicy(policy =>
@@ -18,6 +18,39 @@ builder.Services.AddCors(option =>
     });
 });
 
+
+// Add services to the container.
+// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        ValidIssuer = builder.Configuration["JWT:ValidIssuer"],
+        ValidAudience = builder.Configuration["JWT:ValidIssuer"],
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["JWT:Secret"]))
+    };
+});
+builder.Services.AddAuthorization();
+builder.Services.AddOpenApi();
+
+
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+if (string.IsNullOrEmpty(connectionString))
+{
+    throw new InvalidOperationException("Connection String key name not configured");
+
+}
+builder.Services.AddDbContext<WorkFlowAutomationDbContext>(option => option.UseSqlServer(connectionString));
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -28,17 +61,6 @@ var app = builder.Build();
 // }
 
 app.UseHttpsRedirection();
-
-app.Use(async (context, next) =>
-{
-    await next();
-
-    if (context.Response != null)
-    {
-        var corsHeaders = context.Response.Headers
-            .Where(h => h.Key.StartsWith("Access-Control-", StringComparison.InvariantCultureIgnoreCase));
-    }
-});
 
 app.UseCors();
 app.UseAuthentication();
